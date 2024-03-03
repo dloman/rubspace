@@ -1,36 +1,34 @@
-// client.rs
-#![feature(io)]
-#![feature(core)]
-#![feature(path)]
-#![feature(env)]
+use std::os::unix::net::{SocketAddr, UnixStream};
+use std::io::Write;
 
-use std::env;
-use common::SOCKET_PATH;
-use std::old_io::net::pipe::UnixStream;
+use protobuf::Message;
+mod subspace;
 
-mod common;
+fn main() -> std::io::Result<()> {
+    let addr = SocketAddr::from_pathname("/tmp/subspace")?;
 
-fn main() {
-    // `args` returns the arguments passed to the program
-    let args: Vec<String> = env::args().map(|x| x.to_string())
-                                       .collect();
-    let socket = Path::new(SOCKET_PATH);
-
-    // First argument is the message to be sent
-    let message = match args.as_slice() {
-        [_, ref message] => message.as_slice(),
-        _ => panic!("wrong number of arguments"),
+    let mut socket = match UnixStream::connect_addr(&addr) {
+        Ok(sock) => sock,
+        Err(e) => {
+            println!("Couldn't connect: {e:?}");
+            return Err(e)
+        }
     };
 
-    // Connect to socket
-    let mut stream = match UnixStream::connect(&socket) {
-        Err(_) => panic!("server is not running"),
-        Ok(stream) => stream,
-    };
+    let mut request = subspace::Request::new();
+    request.mut_init().client_name = "client_name".to_string();
+    let mut bytes = request.write_to_bytes().unwrap();
 
-    // Send message
-    match stream.write_str(message) {
-        Err(_) => panic!("couldn't send message"),
-        Ok(_) => {}
-    }
+    let mut packet: Vec<u8> = vec![];
+    packet.append(&mut bytes.len().to_be_bytes().to_vec());
+
+    packet.append(&mut bytes);
+
+    let num_bytes = packet.len();
+    println!("sending {request} for init {num_bytes}");
+    socket.write_all(&packet)?;
+    //println!("sent {bytes_written} ");
+//    let response = subspace::Response::merge_from(server.read())?;
+//    println!("{response}");
+    Ok(())
 }
