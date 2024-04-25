@@ -16,3 +16,4 @@ edition = "2021"
 
 [dependencies]
 protobuf = "3.4.0"
+bit-set = "0.5.3"
